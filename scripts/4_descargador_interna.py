@@ -187,6 +187,10 @@ def descargar_uno(sesion, fila):
             resultado["estado"] = "OK" if ext == "pdf" else f"OK_{ext.upper()}"
             resultado["detalle"] = f"{len(contenido)} bytes"
             return resultado
+        except SesionExpirada:
+            # No tiene sentido reintentar: la cookie no sirve. Se propaga
+            # para que main() detenga todo el proceso de inmediato.
+            raise
         except Exception as e:
             ultimo_error = str(e)
             if intento < REINTENTOS:
@@ -235,15 +239,27 @@ def main():
     conteo_estado = {}
     inicio = time.time()
 
-    for i, fila in enumerate(filas, 1):
-        res = descargar_uno(sesion, fila)
-        resultados.append(res)
-        conteo_estado[res["estado"]] = conteo_estado.get(res["estado"], 0) + 1
-        marca = "OK " if res["estado"].startswith("OK") else "ERR"
-        print(f"[{i}/{total}] {marca} {res.get('n_documento','')} "
-              f"[{res.get('tipo_documento','')}] ({res.get('mes_nombre','')}) "
-              f"-> {res.get('archivo') or res['detalle']}")
-        time.sleep(ESPERA_ENTRE)
+    try:
+        for i, fila in enumerate(filas, 1):
+            res = descargar_uno(sesion, fila)
+            resultados.append(res)
+            conteo_estado[res["estado"]] = conteo_estado.get(res["estado"], 0) + 1
+            marca = "OK " if res["estado"].startswith("OK") else "ERR"
+            print(f"[{i}/{total}] {marca} {res.get('n_documento','')} "
+                  f"[{res.get('tipo_documento','')}] ({res.get('mes_nombre','')}) "
+                  f"-> {res.get('archivo') or res['detalle']}")
+            time.sleep(ESPERA_ENTRE)
+    except SesionExpirada:
+        print("\n" + "!" * 70)
+        print(" SESIÓN EXPIRADA: la cookie ya no es válida.")
+        print(" El servidor está respondiendo 'Su sesión ha expirado' en vez de")
+        print(" los documentos. No se descargó nada útil desde ese punto.")
+        print("\n QUÉ HACER:")
+        print("  1. Vuelve al navegador y asegúrate de tener sesión activa en Cero Papel.")
+        print("  2. Saca una COOKIE fresca (F12 -> Network -> petición del sitio -> Cookie:).")
+        print("  3. Pégala en la variable COOKIE de este script y vuelve a ejecutar.")
+        print("!" * 70)
+        sys.exit(2)
 
     # ---- Índice maestro ----
     columnas = [

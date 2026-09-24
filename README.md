@@ -128,11 +128,36 @@ scraping-gestor-cpat/
 │  ├─ 1_extractor_consola.js         # Entrada: extractor (consola F12)
 │  ├─ 2_descargador.py               # Entrada: descargador (Python)
 │  ├─ 3_extractor_interna_consola.js # Interna: extractor (consola F12)
-│  └─ 4_descargador_interna.py       # Interna: descargador (Python)
+│  ├─ 4_descargador_interna.py       # Interna: descargador (Python)
+│  └─ 5_limpiar_html_basura.py       # Utilidad: borra .html de páginas de error
 ├─ datos/                             # CSVs exportados (ignorados por git)
 ├─ salida/                            # Descargas reporte de entrada (ignorado)
 └─ salida_interna/                    # Descargas reporte interno (ignorado)
 ```
+
+## Sesión expirada y archivos `.html`
+
+La cookie de sesión **caduca** tras un rato de inactividad. Si expira durante una
+descarga, el servidor deja de entregar los documentos y responde con una página de
+aviso ("Su sesión ha expirado").
+
+- Los descargadores **detectan esta página y se detienen de inmediato**, avisándote
+  que la cookie ya no sirve. Así no se generan cientos de archivos inútiles.
+- Si en corridas anteriores quedaron archivos `.html` basura (páginas de error del
+  sistema), límpialos con:
+  ```powershell
+  & "$env:LOCALAPPDATA\Programs\PythonEmbed312\python.exe" scripts\5_limpiar_html_basura.py
+  ```
+  Borra solo los `.html` que son páginas de error del gestor y **conserva** cualquier
+  `.html` que no lo sea. Con `--todos` borra todos los `.html`.
+
+## Documentos que fallan puntualmente
+
+Algunos documentos pueden estar **anulados, restringidos o no accesibles**; el
+sistema responde con una página de aviso en vez del PDF. Quedan registrados en el
+**índice maestro** con su estado, así tienes trazabilidad de cuáles fueron. Para
+reintentarlos, vuelve a ejecutar el descargador con una cookie fresca: los que ya
+están descargados no se vuelven a bajar.
 
 ## Solución de problemas
 
@@ -141,5 +166,5 @@ scraping-gestor-cpat/
   del Microsoft Store en *Configuración → Aplicaciones → Alias de ejecución*.
 - **Descargas con estado `ERROR`:** suele ser cookie expirada. Saca una cookie fresca
   y vuelve a ejecutar; los ya descargados no se vuelven a bajar.
-- **Archivos que salen como `.html`:** significa que la previsualización no expuso el
-  PDF directo; revisa la fila en el índice maestro (columna `detalle`).
+- **El proceso se detuvo con "SESIÓN EXPIRADA":** saca una cookie fresca del navegador
+  y vuelve a ejecutar.
