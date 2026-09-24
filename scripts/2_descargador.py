@@ -97,6 +97,27 @@ def limpiar_nombre(texto, max_len=60):
     return texto[:max_len].strip("_")
 
 
+def escribir_csv_seguro(ruta, escribir_fn):
+    """
+    Escribe un CSV llamando a escribir_fn(file_handle). Si el archivo está
+    bloqueado (abierto en Excel, etc.), guarda en una copia con marca de tiempo
+    y devuelve la ruta realmente usada, sin abortar el proceso.
+    """
+    import time as _t
+    destinos = [ruta, ruta.with_name(f"{ruta.stem}_{_t.strftime('%Y%m%d_%H%M%S')}{ruta.suffix}")]
+    for destino in destinos:
+        try:
+            with open(destino, "w", encoding="utf-8-sig", newline="") as f:
+                escribir_fn(f)
+            return destino
+        except PermissionError:
+            if destino is ruta:
+                print(f"\n [!] '{ruta.name}' está bloqueado (¿abierto en Excel?).")
+                print(f"     Guardando en su lugar: {destinos[1].name}")
+            continue
+    return None
+
+
 def leer_csv(ruta):
     """Lee el CSV del extractor (separado por ';', con BOM)."""
     if not ruta.exists():
@@ -331,11 +352,12 @@ def main():
         "institucion", "id_documento", "url_descarga", "anio", "mes", "mes_nombre",
         "carpeta", "archivo", "estado", "detalle",
     ]
-    with open(INDICE, "w", encoding="utf-8-sig", newline="") as f:
+    def _escribir_indice(f):
         w = csv.DictWriter(f, fieldnames=columnas, delimiter=";", extrasaction="ignore")
         w.writeheader()
         for r in resultados:
             w.writerow(r)
+    ruta_indice = escribir_csv_seguro(INDICE, _escribir_indice)
 
     # ---- Resumen de conteo por mes ----
     porc_mes = {}
@@ -348,7 +370,7 @@ def main():
         else:
             d["error"] += 1
 
-    with open(RESUMEN, "w", encoding="utf-8-sig", newline="") as f:
+    def _escribir_resumen(f):
         w = csv.writer(f, delimiter=";")
         w.writerow(["anio", "mes", "mes_nombre", "documentos_transacciones",
                     "descargados_ok", "fallidos"])
@@ -359,6 +381,7 @@ def main():
             w.writerow([anio, mes, nombre, d["total"], d["ok"], d["error"]])
             tot_t += d["total"]; tot_ok += d["ok"]; tot_err += d["error"]
         w.writerow(["", "", "TOTAL", tot_t, tot_ok, tot_err])
+    ruta_resumen = escribir_csv_seguro(RESUMEN, _escribir_resumen)
 
     # ---- Resumen en consola ----
     dur = time.time() - inicio
@@ -367,8 +390,8 @@ def main():
     print("=" * 70)
     print(f" Tiempo total: {dur/60:.1f} min")
     print(f" Estados: {conteo_estado}")
-    print(f" Índice maestro:  {INDICE}")
-    print(f" Resumen conteo:  {RESUMEN}")
+    print(f" Índice maestro:  {ruta_indice if ruta_indice else '[NO SE PUDO ESCRIBIR]'}")
+    print(f" Resumen conteo:  {ruta_resumen if ruta_resumen else '[NO SE PUDO ESCRIBIR]'}")
     print(f" Carpetas por mes en: {DIR_SALIDA}")
     if conteo_estado.get("ERROR"):
         print(f"\n [!] Hubo {conteo_estado['ERROR']} fallidos. Revisa la columna "
